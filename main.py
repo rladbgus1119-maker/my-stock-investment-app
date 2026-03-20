@@ -5,11 +5,11 @@ import time
 import numpy as np
 import random
 
-# 1. 페이지 설정 및 테마 시스템
-st.set_page_config(page_title="원광대 AI 투자 & 아카데미 v6.0", layout="wide")
+# 1. 페이지 설정 및 실시간 테마 시스템
+st.set_page_config(page_title="원광대 AI 실시간 투자 시스템", layout="wide")
 
-# 사이드바 설정 (테마 및 포인트 표시)
-st.sidebar.title("⚙️ 시스템 설정")
+# 사이드바 테마 설정
+st.sidebar.title("🎨 UI 환경 설정")
 theme_choice = st.sidebar.radio("배경 테마 선택", ["라이트 모드", "다크 모드"])
 
 if theme_choice == "다크 모드":
@@ -17,22 +17,24 @@ if theme_choice == "다크 모드":
 else:
     bg, txt, card, border = "#ffffff", "#000000", "#f8fafc", "#e2e8f0"
 
-# 커스텀 CSS 적용
+# 커스텀 CSS (테마 반영 및 퀴즈 시인성 강화)
 st.markdown(f"""
     <style>
     .stApp {{ background-color: {bg}; color: {txt}; }}
-    h1, h2, h3, h4, p, span, label {{ color: {txt} !important; }}
+    h1, h2, h3, h4, p, span, label, .stMarkdown {{ color: {txt} !important; }}
     .stMetric {{ background-color: {card}; padding: 12px; border-radius: 12px; border: 1px solid {border}; }}
     .rank-card {{ background-color: {card}; border-radius: 10px; padding: 10px; border: 1px solid {border}; margin-bottom: 5px; }}
     .item-card {{ background-color: {card}; padding: 15px; border-radius: 10px; border: 1px solid {border}; text-align: center; margin-bottom: 10px; }}
+    .quiz-question {{ background-color: {card}; padding: 15px; border-radius: 10px; border-left: 5px solid #3b82f6; margin-bottom: 5px; font-weight: bold; }}
     #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 세트 및 아바타 설정
+# 2. 데이터 세트 확장 (새로운 용어 및 퀴즈)
 stock_map = {
     "삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "NVIDIA": "NVDA",
-    "애플": "AAPL", "테슬라": "TSLA", "현대차": "005380.KS", "넥슨": "3659.T"
+    "애플": "AAPL", "테슬라": "TSLA", "현대차": "005380.KS", "넥슨": "3659.T",
+    "ASML": "ASML", "TSMC": "TSM", "ARM": "ARM"
 }
 
 avatar_base = {"🛡️ 든든한 가디언": "🐢", "🚀 불타는 로켓": "🚀", "⚖️ 냉철한 분석가": "💻", "🌱 투자 꿈나무": "🌱", "🐣 분석 대기 중": "🥚"}
@@ -46,10 +48,12 @@ shop_items = {
     "🕶️ 테크니컬 고글": {"price": 40, "emoji": "🕶️"}
 }
 
+# [새로운 퀴즈 세트]
 quiz_pool = [
-    {"q": "기업이 이익의 일부를 주주에게 나누어 주는 보너스는?", "a": "배당금", "o": ["배당금", "이자", "상여금"]},
-    {"q": "주식 수량에 현재가를 곱한 기업의 전체 가치는?", "a": "시가총액", "o": ["자본금", "시가총액", "매출액"]},
-    {"q": "PER이 낮을수록 이익 대비 주가가 저평가된 것이다?", "a": "O", "o": ["O", "X"]}
+    {"q": "주식의 가격이 가치보다 낮게 평가된 상태를 무엇이라 하나요?", "a": "저평가", "o": ["저평가", "고평가", "무평가"]},
+    {"q": "반도체 기업 ASML이 독점 공급하며, 미세 공정에 필수인 장비는?", "a": "EUV", "o": ["EUV", "DUV", "CVD"]},
+    {"q": "전자공학에서 MOSFET의 세 가지 단자가 아닌 것은?", "a": "Base", "o": ["Gate", "Drain", "Base"]},
+    {"q": "특정 가격 이하로 떨어지면 자동으로 매도하여 손실을 막는 기법은?", "a": "손절매", "o": ["추가매수", "손절매", "공매도"]}
 ]
 
 # 3. 실시간 가격 엔진
@@ -74,16 +78,17 @@ if 'user_name' not in st.session_state:
     })
 
 def init_bots(diff):
+    # 봇 9명 생성 (사용자 포함 10명)
     names = ["퀀트장인", "익산불개미", "반도체박사", "나스닥귀신", "워런버핏봇", "단타의신", "원광대우등생", "AI알고리즘", "풀매수전사"]
     base = {"초급": 50000000, "중급": 10000000, "상급": 1000000}[diff]
-    return [{"닉네임": n, "자산": base * (1 + (random.random()-0.5)*0.1), "성향": random.choice(list(avatar_base.keys())[:4]), "난이도": diff} for n in names]
+    return [{"닉네임": n, "자산": base * (1 + (random.random()-0.5)*0.15), "성향": random.choice(list(avatar_base.keys())[:4]), "난이도": diff} for n in names]
 
 # 5. 로그인 화면
 if not st.session_state.user_name:
-    st.title("👨‍🔬 원광대 행동분석 AI 투자 센터")
+    st.title("👨‍🔬 원광대 행동분석 AI 투자 시스템")
     with st.container(border=True):
         name = st.text_input("닉네임 입력")
-        diff_choice = st.selectbox("등급 선택", ["초급 (5,000만)", "중급 (1,000만)", "상급 (100만)"])
+        diff_choice = st.selectbox("등급 선택 (난이도)", ["초급 (5,000만)", "중급 (1,000만)", "상급 (100만)"])
         if st.button("시스템 가동"):
             if name:
                 st.session_state.user_name = name
@@ -110,7 +115,7 @@ prices = fetch_prices()
 total_stock_val = sum(st.session_state.portfolio[s] * prices[s] for s in stock_map)
 total_assets = st.session_state.balance + total_stock_val
 
-# 아바타 조합 (베이스 + 아이템)
+# 아바타 조합
 full_avatar = f"{avatar_base.get(st.session_state.avatar, '🥚')} {st.session_state.equipped}"
 
 st.title(f"{full_avatar} {st.session_state.user_name} 관제 센터")
@@ -123,12 +128,12 @@ with col_h3:
     if not st.session_state.attendance:
         if st.button("📅 출석 체크 (+5만/10P)"):
             st.session_state.attendance = True; st.session_state.balance += 50000; st.session_state.points += 10; st.rerun()
-    else: st.success("✅ 출석 완료")
+    else: st.success("✅ 오늘 출석 완료")
 
 st.divider()
 
 # 8. 기능 통합 탭
-tab_market, tab_shop, tab_custom, tab_quiz = st.tabs(["🛒 거래소 & 랭킹", "🛍️ 포인트 상점", "👗 아바타 꾸미기", "❓ 미션 & 퀴즈"])
+tab_market, tab_shop, tab_custom, tab_quiz, tab_academy = st.tabs(["🛒 거래소 & 랭킹", "🛍️ 포인트 상점", "👗 아바타 꾸미기", "❓ 미션 & 퀴즈", "📚 투자 사전"])
 
 # [탭 1: 거래소 & 10인 랭킹]
 with tab_market:
@@ -142,26 +147,28 @@ with tab_market:
                 if i+j < len(st_items):
                     n, p = st_items[i+j]
                     with cols[j].container(border=True):
-                        st.write(f"### {n}"); st.write(f"가: {p:,}원 | 보: {st.session_state.portfolio[n]}주")
+                        st.write(f"### {n}"); st.write(f"현재가: {p:,}원 | 보유: {st.session_state.portfolio[n]}주")
                         b, s = st.columns(2)
                         if b.button(f"매수", key=f"b_{n}"):
                             if st.session_state.balance >= p * qty:
                                 st.session_state.balance -= p * qty; st.session_state.portfolio[n] += qty
                                 st.session_state.trade_count += 1
-                                if n in ["NVIDIA", "테슬라"]: st.session_state.tech_focus += 1
+                                if n in ["NVIDIA", "ASML", "TSMC"]: st.session_state.tech_focus += 1
                                 st.rerun()
                         if s.button(f"매도", key=f"s_{n}"):
                             if st.session_state.portfolio[n] >= qty:
                                 st.session_state.balance += p * qty; st.session_state.portfolio[n] -= qty
                                 st.session_state.trade_count += 1; st.rerun()
     with c_r:
-        st.subheader(f"🏆 {st.session_state.difficulty} 10인 랭킹")
+        st.subheader(f"🏆 {st.session_state.difficulty} 실시간 랭킹 (10인)")
         user_rank = {"닉네임": f"{st.session_state.user_name} ⭐", "성향": st.session_state.avatar, "자산": total_assets}
-        for bot in st.session_state.bots: bot['자산'] *= (1 + (random.random()-0.5)*0.002) # 봇 자산 역동성
+        # 봇 자산 실시간 변동 로직
+        for bot in st.session_state.bots: bot['자산'] *= (1 + (random.random()-0.5)*0.003)
+        
         all_players = sorted(st.session_state.bots + [user_rank], key=lambda x: x["자산"], reverse=True)
         for idx, p in enumerate(all_players):
             medal = "🥇" if idx == 0 else "🥈" if idx == 1 else "🥉" if idx == 2 else f"{idx+1}위"
-            st.markdown(f'<div class="rank-card">{medal} {p["닉네임"]} <br> {p["자산"]:,.0f}원</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="rank-card">{medal} {p["닉네임"]} <br> 자산: {p["자산"]:,.0f}원</div>', unsafe_allow_html=True)
         if st.button("🔄 시세/랭킹 새로고침"): st.rerun()
 
 # [탭 2: 포인트 상점]
@@ -193,23 +200,38 @@ with tab_custom:
             else:
                 if col_i2.button("장착", key=f"eq_{item}"): st.session_state.equipped = shop_items[item]['emoji']; st.rerun()
 
-# [탭 4: 미션 & 퀴즈]
+# [탭 4: 미션 & 퀴즈 - 문제 표시 버그 수정]
 with tab_quiz:
     st.subheader("🎯 특별 미션")
     if total_assets >= 100000000:
-        if st.button("🚩 자산 1억 달성 보상 받기 (+100P)"): st.session_state.points += 100; st.rerun()
+        st.success("🎉 자산 1억 달성 미션 성공!")
+        if st.button("보상 받기 (+100P)"): st.session_state.points += 100; st.rerun()
     
     st.divider()
     st.subheader("🧠 지식 퀴즈 (정답 시 10P + 1만 원)")
     for i, item in enumerate(quiz_pool):
-        with st.container(border=True):
-            st.markdown(f"#### Q{i+1}. {item['q']}")
-            ans = st.radio(f"정답 선택 (Q{i+1})", item['o'], key=f"q_{i}")
-            if st.button(f"정답 제출", key=f"btn_{i}"):
-                if ans == item['a']:
-                    st.success("정답! 보상이 지급되었습니다."); st.session_state.balance += 10000; st.session_state.points += 10; st.rerun()
-                else: st.error("오답입니다!")
+        # [수정] 문제를 먼저 명시적으로 출력
+        st.markdown(f'<div class="quiz-question">Q{i+1}. {item["q"]}</div>', unsafe_allow_html=True)
+        ans = st.radio(f"정답을 고르세요 (문제 {i+1})", item['o'], key=f"q_{i}", index=None)
+        
+        if st.button(f"정답 확인 (Q{i+1})", key=f"btn_{i}"):
+            if ans == item['a']:
+                st.success("정답입니다! 보상이 지급되었습니다."); st.session_state.balance += 10000; st.session_state.points += 10; time.sleep(0.5); st.rerun()
+            else: st.error("틀렸습니다. 다시 공부해보세요!")
+        st.write("---")
 
+# [탭 5: 투자 사전 - 새로운 용어]
+with tab_academy:
+    st.header("📚 주식 & 공학 투자 사전")
+    new_terms = {
+        "블루칩(Blue Chip)": "수익성, 성장성, 안정성이 높은 대형 우량주를 의미합니다.",
+        "수율(Yield)": "반도체 제조에서 투입량 대비 완성된 무결점 제품의 비율. 엔지니어의 핵심 평가지표입니다.",
+        "배당수익률": "주가 대비 1년간 받는 배당금의 비율입니다.",
+        "데드캣 바운스": "주가가 급락하다가 잠시 소폭 반등하는 현상 (속지 마세요!)"
+    }
+    for k, v in new_terms.items():
+        st.write(f"**{k}**: {v}")
+    
     if st.button("🔄 전체 초기화"):
         for k in list(st.session_state.keys()): del st.session_state[k]
         st.rerun()
