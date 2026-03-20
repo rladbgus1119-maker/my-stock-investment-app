@@ -5,181 +5,213 @@ import time
 import numpy as np
 import random
 
-# 1. 페이지 설정 및 디자인
-st.set_page_config(page_title="원광대 AI 투자 & 아카데미 시스템", layout="wide")
+# 1. 페이지 설정 및 테마 시스템
+st.set_page_config(page_title="원광대 AI 투자 & 아카데미 v6.0", layout="wide")
 
-st.markdown("""
+# 사이드바 설정 (테마 및 포인트 표시)
+st.sidebar.title("⚙️ 시스템 설정")
+theme_choice = st.sidebar.radio("배경 테마 선택", ["라이트 모드", "다크 모드"])
+
+if theme_choice == "다크 모드":
+    bg, txt, card, border = "#0e1117", "#ffffff", "#262730", "#444"
+else:
+    bg, txt, card, border = "#ffffff", "#000000", "#f8fafc", "#e2e8f0"
+
+# 커스텀 CSS 적용
+st.markdown(f"""
     <style>
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-    .stMetric { background-color: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    .news-box { background-color: #fffbeb; padding: 12px; border-left: 5px solid #f59e0b; margin-bottom: 10px; border-radius: 5px; font-size: 0.85rem; }
-    .mission-card { background-color: #f0fdf4; padding: 15px; border-radius: 10px; border: 1px solid #bbf7d0; margin-bottom: 10px; }
+    .stApp {{ background-color: {bg}; color: {txt}; }}
+    h1, h2, h3, h4, p, span, label {{ color: {txt} !important; }}
+    .stMetric {{ background-color: {card}; padding: 12px; border-radius: 12px; border: 1px solid {border}; }}
+    .rank-card {{ background-color: {card}; border-radius: 10px; padding: 10px; border: 1px solid {border}; margin-bottom: 5px; }}
+    .item-card {{ background-color: {card}; padding: 15px; border-radius: 10px; border: 1px solid {border}; text-align: center; margin-bottom: 10px; }}
+    #MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} header {{visibility: hidden;}}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 데이터 세트 설계 (주식, 퀴즈, 용어)
+# 2. 데이터 세트 및 아바타 설정
 stock_map = {
     "삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "NVIDIA": "NVDA",
-    "애플": "AAPL", "테슬라": "TSLA", "구글": "GOOGL", "마이크로소프트": "MSFT",
-    "현대차": "005380.KS", "넥슨": "3659.T", "텐센트": "0700.HK"
+    "애플": "AAPL", "테슬라": "TSLA", "현대차": "005380.KS", "넥슨": "3659.T"
 }
 
-avatar_info = {
-    "🛡️ 든든한 가디언": "안전과 장기 투자를 선호하는 보수적 엔지니어",
-    "🚀 불타는 로켓": "고수익 기술주에 올인하는 공격적 엔지니어",
-    "⚖️ 냉철한 분석가": "데이터와 단기 흐름을 쫓는 전략적 엔지니어",
-    "🌱 투자 꿈나무": "원광대 정신으로 미래 가치를 키우는 성장형 엔지니어"
+avatar_base = {"🛡️ 든든한 가디언": "🐢", "🚀 불타는 로켓": "🚀", "⚖️ 냉철한 분석가": "💻", "🌱 투자 꿈나무": "🌱", "🐣 분석 대기 중": "🥚"}
+
+shop_items = {
+    "👑 황금 왕관": {"price": 100, "emoji": "👑"},
+    "🥼 연구실 실험복": {"price": 50, "emoji": "🥼"},
+    "🎮 드론 컨트롤러": {"price": 30, "emoji": "🎮"},
+    "🏎️ RC카 조종기": {"price": 30, "emoji": "🏎️"},
+    "🎓 원광대 학사모": {"price": 80, "emoji": "🎓"},
+    "🕶️ 테크니컬 고글": {"price": 40, "emoji": "🕶️"}
 }
 
 quiz_pool = [
-    {"q": "기업이 이익 중 일부를 주주에게 나누어 주는 것은?", "a": "배당금", "o": ["배당금", "이자", "상여금"]},
+    {"q": "기업이 이익의 일부를 주주에게 나누어 주는 보너스는?", "a": "배당금", "o": ["배당금", "이자", "상여금"]},
     {"q": "주식 수량에 현재가를 곱한 기업의 전체 가치는?", "a": "시가총액", "o": ["자본금", "시가총액", "매출액"]},
     {"q": "PER이 낮을수록 이익 대비 주가가 저평가된 것이다?", "a": "O", "o": ["O", "X"]}
 ]
 
-# 3. 실시간 가격 엔진 (캐싱 적용)
-@st.cache_data(ttl=60)
-def get_market_data():
+# 3. 실시간 가격 엔진
+@st.cache_data(ttl=30)
+def fetch_prices():
     prices = {}
     for name, ticker in stock_map.items():
         try:
-            data = yf.Ticker(ticker)
-            p = data.history(period="1d")['Close'].iloc[-1]
-            if ".KS" not in ticker: # 해외 주식 환율 적용
-                if ".T" in ticker: p *= 9.2   # JPY
-                elif ".HK" in ticker: p *= 172.0 # HKD
-                else: p *= 1410.0 # USD
-            prices[name] = int(p * (1 + (np.random.rand()-0.5)*0.002))
+            data = yf.Ticker(ticker); p = data.history(period="1d")['Close'].iloc[-1]
+            if ".KS" not in ticker: p *= 1415 # 환율
+            prices[name] = int(p * (1 + (np.random.rand()-0.5)*0.005))
         except: prices[name] = 100000
     return prices
 
-# 4. 세션 상태 초기화 (메모리 설계)
-if 'init' not in st.session_state:
+# 4. 세션 상태 초기화
+if 'user_name' not in st.session_state:
     st.session_state.update({
-        'init': True, 'user_name': "", 'difficulty': "", 'avatar': "", 'points': 0,
-        'balance': 0.0, 'portfolio': {s: 0 for s in stock_map},
-        'attendance': False, 'm_trade': False, 'quiz_done': [False]*len(quiz_pool),
-        'bot_data': [
-            {"닉네임": "안전봇", "난이도": "초급", "자산": 55000000.0, "성향": "🛡️ 든든한 가디언"},
-            {"닉네임": "성장봇", "난이도": "초급", "자산": 52000000.0, "성향": "🌱 투자 꿈나무"},
-            {"닉네임": "분석봇", "난이도": "중급", "자산": 15000000.0, "성향": "⚖️ 냉철한 분석가"},
-            {"닉네임": "로켓봇", "난이도": "중급", "자산": 12000000.0, "성향": "🚀 불타는 로켓"},
-            {"닉네임": "나스닥귀신", "난이도": "상급", "자산": 3000000.0, "성향": "🚀 불타는 로켓"},
-            {"닉네임": "워런버핏봇", "난이도": "상급", "자산": 2500000.0, "성향": "🛡️ 든든한 가디언"}
-        ]
+        'user_name': "", 'difficulty': "", 'balance': 0.0, 'points': 0,
+        'portfolio': {s: 0 for s in stock_map}, 'trade_count': 0, 'tech_focus': 0,
+        'avatar': "🐣 분석 대기 중", 'attendance': False,
+        'inventory': [], 'equipped': "", 'bots': []
     })
 
-# --- 5. 온보딩: AI 성향 분석 및 난이도 설정 ---
+def init_bots(diff):
+    names = ["퀀트장인", "익산불개미", "반도체박사", "나스닥귀신", "워런버핏봇", "단타의신", "원광대우등생", "AI알고리즘", "풀매수전사"]
+    base = {"초급": 50000000, "중급": 10000000, "상급": 1000000}[diff]
+    return [{"닉네임": n, "자산": base * (1 + (random.random()-0.5)*0.1), "성향": random.choice(list(avatar_base.keys())[:4]), "난이도": diff} for n in names]
+
+# 5. 로그인 화면
 if not st.session_state.user_name:
-    st.title("👨‍🔬 AI 투자 성향 분석 & 시스템 가동")
+    st.title("👨‍🔬 원광대 행동분석 AI 투자 센터")
     with st.container(border=True):
         name = st.text_input("닉네임 입력")
-        diff = st.selectbox("챌린지 등급", ["초급 (5,000만)", "중급 (1,000만)", "상급 (100만)"])
-        
-        st.write("---")
-        st.write("**🤖 AI 투자 성향 진단**")
-        q1 = st.radio("위험 선호도", ["원금 보호가 최고다", "손실 감수하고 대박 노린다"])
-        q2 = st.radio("투자 기간", ["오래 보유한다", "매일 확인하고 사고판다"])
-        
-        if st.button("성향 분석 및 접속"):
+        diff_choice = st.selectbox("등급 선택", ["초급 (5,000만)", "중급 (1,000만)", "상급 (100만)"])
+        if st.button("시스템 가동"):
             if name:
                 st.session_state.user_name = name
-                st.session_state.difficulty = diff.split()[0]
-                st.session_state.balance = 50000000.0 if "초급" in diff else 10000000.0 if "중급" in diff else 1000000.0
-                
-                # 분석 로직
-                if "원금" in q1 and "오래" in q2: st.session_state.avatar = "🛡️ 든든한 가디언"
-                elif "손실" in q1 and "매일" in q2: st.session_state.avatar = "🚀 불타는 로켓"
-                elif "매일" in q2: st.session_state.avatar = "⚖️ 냉철한 분석가"
-                else: st.session_state.avatar = "🌱 투자 꿈나무"
-                
-                st.success(f"분석 완료! 당신은 **{st.session_state.avatar}** 타입입니다."); time.sleep(1.5); st.rerun()
+                d_label = diff_choice.split()[0]
+                st.session_state.difficulty = d_label
+                st.session_state.balance = 50000000.0 if "초급" in diff_choice else 10000000.0 if "중급" in diff_choice else 1000000.0
+                st.session_state.bots = init_bots(d_label)
+                st.rerun()
     st.stop()
 
-# --- 6. 메인 제어 센터 ---
-prices = get_market_data()
+# 6. 행동 분석 AI 엔진
+def analyze_personality():
+    tc = st.session_state.trade_count
+    tf = st.session_state.tech_focus
+    if tc >= 10: st.session_state.avatar = "⚖️ 냉철한 분석가"
+    elif tf >= 5: st.session_state.avatar = "🚀 불타는 로켓"
+    elif tc >= 1: st.session_state.avatar = "🛡️ 든든한 가디언"
+    else: st.session_state.avatar = "🌱 투자 꿈나무"
+
+analyze_personality()
+
+# 7. 상단 대시보드
+prices = fetch_prices()
 total_stock_val = sum(st.session_state.portfolio[s] * prices[s] for s in stock_map)
 total_assets = st.session_state.balance + total_stock_val
 
-st.title(f"{st.session_state.avatar.split()[0]} {st.session_state.user_name} 엔지니어")
-st.caption(f"등급: {st.session_state.difficulty} | 성향: {st.session_state.avatar}")
+# 아바타 조합 (베이스 + 아이템)
+full_avatar = f"{avatar_base.get(st.session_state.avatar, '🥚')} {st.session_state.equipped}"
 
-col_h1, col_h2, col_h3, col_h4 = st.columns(4)
-col_h1.metric("💵 보유 현금", f"{st.session_state.balance:,.0f}원")
+st.title(f"{full_avatar} {st.session_state.user_name} 관제 센터")
+st.sidebar.metric("💎 나의 포인트", f"{st.session_state.points} P")
+
+col_h1, col_h2, col_h3 = st.columns([1.5, 1.5, 1])
+col_h1.metric("💵 현금 자산", f"{st.session_state.balance:,.0f}원")
 col_h2.metric("🏆 총 자산", f"{total_assets:,.0f}원")
-col_h3.metric("💎 포인트", f"{st.session_state.points}P")
-with col_h4:
+with col_h3:
     if not st.session_state.attendance:
-        if st.button("📅 오늘 출석 (5만 원)"):
-            st.session_state.attendance = True; st.session_state.balance += 50000; st.session_state.points += 10
-            st.toast("출석 완료!"); time.sleep(0.5); st.rerun()
+        if st.button("📅 출석 체크 (+5만/10P)"):
+            st.session_state.attendance = True; st.session_state.balance += 50000; st.session_state.points += 10; st.rerun()
     else: st.success("✅ 출석 완료")
 
 st.divider()
 
-# --- 7. 기능 통합 탭 ---
-tab_trade, tab_mission, tab_academy = st.tabs(["🛒 거래소 & 랭킹", "🎯 미션 & 보상", "📚 투자 아카데미"])
+# 8. 기능 통합 탭
+tab_market, tab_shop, tab_custom, tab_quiz = st.tabs(["🛒 거래소 & 랭킹", "🛍️ 포인트 상점", "👗 아바타 꾸미기", "❓ 미션 & 퀴즈"])
 
-# [탭 1: 거래소 & 등급별 랭킹]
-with tab_trade:
-    c_main, c_side = st.columns([2, 1])
-    with c_main:
-        st.subheader("🛒 실시간 마켓")
-        t_qty = st.number_input("거래 수량 설정", min_value=1, value=1)
-        stocks = list(prices.items())
-        for i in range(0, len(stocks), 2):
+# [탭 1: 거래소 & 10인 랭킹]
+with tab_market:
+    c_m, c_r = st.columns([1.8, 1.2])
+    with c_m:
+        qty = st.number_input("거래 수량 설정", min_value=1, value=1)
+        st_items = list(prices.items())
+        for i in range(0, len(st_items), 2):
             cols = st.columns(2)
             for j in range(2):
-                if i+j < len(stocks):
-                    n, p = stocks[i+j]
+                if i+j < len(st_items):
+                    n, p = st_items[i+j]
                     with cols[j].container(border=True):
                         st.write(f"### {n}"); st.write(f"가: {p:,}원 | 보: {st.session_state.portfolio[n]}주")
                         b, s = st.columns(2)
                         if b.button(f"매수", key=f"b_{n}"):
-                            if st.session_state.balance >= p * t_qty:
-                                st.session_state.balance -= p * t_qty; st.session_state.portfolio[n] += t_qty
-                                st.session_state.m_trade = True; st.rerun()
-                        if s.button(f"매도", key=f"s_{n}"):
-                            if st.session_state.portfolio[n] >= t_qty:
-                                st.session_state.balance += p * t_qty; st.session_state.portfolio[n] -= t_qty
+                            if st.session_state.balance >= p * qty:
+                                st.session_state.balance -= p * qty; st.session_state.portfolio[n] += qty
+                                st.session_state.trade_count += 1
+                                if n in ["NVIDIA", "테슬라"]: st.session_state.tech_focus += 1
                                 st.rerun()
-    with c_side:
-        st.subheader(f"⭐ {st.session_state.difficulty} 등급 랭킹")
-        relevant_bots = [b for b in st.session_state.bot_data if b["난이도"] == st.session_state.difficulty]
+                        if s.button(f"매도", key=f"s_{n}"):
+                            if st.session_state.portfolio[n] >= qty:
+                                st.session_state.balance += p * qty; st.session_state.portfolio[n] -= qty
+                                st.session_state.trade_count += 1; st.rerun()
+    with c_r:
+        st.subheader(f"🏆 {st.session_state.difficulty} 10인 랭킹")
         user_rank = {"닉네임": f"{st.session_state.user_name} ⭐", "성향": st.session_state.avatar, "자산": total_assets}
-        all_r = sorted(relevant_bots + [user_rank], key=lambda x: x["자산"], reverse=True)
-        r_list = [{"순위": i+1, "엔지니어": f"{p['성향'].split()[0]} {p['닉네임']}", "자산": f"{p['자산']:,.0f}원"} for i, p in enumerate(all_r)]
-        st.table(pd.DataFrame(r_list))
+        for bot in st.session_state.bots: bot['자산'] *= (1 + (random.random()-0.5)*0.002) # 봇 자산 역동성
+        all_players = sorted(st.session_state.bots + [user_rank], key=lambda x: x["자산"], reverse=True)
+        for idx, p in enumerate(all_players):
+            medal = "🥇" if idx == 0 else "🥈" if idx == 1 else "🥉" if idx == 2 else f"{idx+1}위"
+            st.markdown(f'<div class="rank-card">{medal} {p["닉네임"]} <br> {p["자산"]:,.0f}원</div>', unsafe_allow_html=True)
+        if st.button("🔄 시세/랭킹 새로고침"): st.rerun()
 
-# [탭 2: 미션 & 보상]
-with tab_mission:
-    st.header("🎯 오늘의 엔지니어 미션")
-    col_m1, col_m2 = st.columns(2)
-    with col_m1:
-        st.markdown(f'<div class="mission-card"><b>첫 매수 성공</b><br>보상: 10만 원 / 20P<br>{"✅ 달성" if st.session_state.m_trade else "⏳ 미달성"}</div>', unsafe_allow_html=True)
-    with col_m2:
-        m2_ok = total_assets >= (100000000 if st.session_state.difficulty == "초급" else 50000000)
-        st.markdown(f'<div class="mission-card"><b>자산 목표 달성</b><br>보상: 50만 원 / 50P<br>{"✅ 달성" if m2_ok else "⏳ 진행 중"}</div>', unsafe_allow_html=True)
+# [탭 2: 포인트 상점]
+with tab_shop:
+    st.header("🛍️ 포인트 상점")
+    item_cols = st.columns(3)
+    for idx, (name, info) in enumerate(shop_items.items()):
+        with item_cols[idx % 3]:
+            st.markdown(f'<div class="item-card"><h2>{info["emoji"]}</h2><b>{name}</b><br>{info["price"]} P</div>', unsafe_allow_html=True)
+            if name in st.session_state.inventory:
+                st.button("보유 중", key=f"owned_{name}", disabled=True, use_container_width=True)
+            else:
+                if st.button(f"구매", key=f"buy_{name}", use_container_width=True):
+                    if st.session_state.points >= info['price']:
+                        st.session_state.points -= info['price']; st.session_state.inventory.append(name); st.rerun()
+                    else: st.error("포인트 부족!")
+
+# [탭 3: 아바타 꾸미기]
+with tab_custom:
+    st.header("👗 나의 드레스룸")
+    if not st.session_state.inventory:
+        st.info("상점에서 아이템을 먼저 구매해 보세요!")
+    else:
+        for item in st.session_state.inventory:
+            col_i1, col_i2 = st.columns([3, 1])
+            col_i1.write(f"### {item}")
+            if st.session_state.equipped == shop_items[item]['emoji']:
+                if col_i2.button("해제", key=f"un_{item}"): st.session_state.equipped = ""; st.rerun()
+            else:
+                if col_i2.button("장착", key=f"eq_{item}"): st.session_state.equipped = shop_items[item]['emoji']; st.rerun()
+
+# [탭 4: 미션 & 퀴즈]
+with tab_quiz:
+    st.subheader("🎯 특별 미션")
+    if total_assets >= 100000000:
+        if st.button("🚩 자산 1억 달성 보상 받기 (+100P)"): st.session_state.points += 100; st.rerun()
     
-    st.header("🧠 지식 테스트 (보너스)")
-    for i, q in enumerate(quiz_pool):
-        if not st.session_state.quiz_done[i]:
-            with st.expander(f"문제 {i+1}"):
-                ans = st.radio("정답 선택", q['o'], key=f"quiz_{i}")
-                if st.button("제출", key=f"btn_{i}"):
-                    if ans == q['a']:
-                        st.session_state.quiz_done[i] = True; st.session_state.balance += 10000; st.rerun()
-        else: st.info(f"문제 {i+1} 완료 (보상 지급됨)")
+    st.divider()
+    st.subheader("🧠 지식 퀴즈 (정답 시 10P + 1만 원)")
+    for i, item in enumerate(quiz_pool):
+        with st.container(border=True):
+            st.markdown(f"#### Q{i+1}. {item['q']}")
+            ans = st.radio(f"정답 선택 (Q{i+1})", item['o'], key=f"q_{i}")
+            if st.button(f"정답 제출", key=f"btn_{i}"):
+                if ans == item['a']:
+                    st.success("정답! 보상이 지급되었습니다."); st.session_state.balance += 10000; st.session_state.points += 10; st.rerun()
+                else: st.error("오답입니다!")
 
-# [탭 3: 아카데미]
-with tab_academy:
-    st.header("📚 주식 용어 사전")
-    terms = {"PER": "주가수익비율. 낮을수록 저평가.", "PBR": "주가순자산비율. 1 미만이면 자산보다 저렴.", "시가총액": "기업의 총 몸무게."}
-    for k, v in terms.items(): st.write(f"**{k}**: {v}")
-    st.image("https://upload.wikimedia.org/wikipedia/commons/e/e4/Stock_market_index_chart.png", caption="시장 흐름 읽기")
-    if st.button("🔄 데이터 전체 리셋"):
+    if st.button("🔄 전체 초기화"):
         for k in list(st.session_state.keys()): del st.session_state[k]
         st.rerun()
 
-st.divider()
 st.latex(r"Asset_{total} = Balance + \sum (Price_{real} \times Qty)")
