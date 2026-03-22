@@ -8,11 +8,11 @@ import random
 from datetime import datetime, timedelta
 from streamlit_autorefresh import st_autorefresh
 
-# 1. 페이지 설정 및 실시간 엔진 (1초 주기)
-st.set_page_config(page_title="AI 실시간 퀀트 v46", layout="wide")
-st_autorefresh(interval=1000, key="global_engine_v46")
+# 1. 시스템 설정 및 실시간 엔진
+st.set_page_config(page_title="AI 퀀트 v47: 뉴스 인사이트", layout="wide")
+st_autorefresh(interval=1000, key="global_engine_v47")
 
-# --- 2. 전역 데이터 설정 ---
+# --- 2. 전역 설정 및 콘텐츠 ---
 STOCK_MAP = {
     "삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "현대차": "005380.KS",
     "NVIDIA": "NVDA", "애플": "AAPL", "테슬라": "TSLA", "마이크로소프트": "MSFT",
@@ -26,23 +26,22 @@ TIER_CFG = {
 }
 
 TERMS_POOL = [
+    {"t": "감성 분석", "d": "텍스트의 긍정/부정 수치를 분석하여 시장 심리를 파악하는 기술입니다."},
     {"t": "코스피(KOSPI)", "d": "한국 거래소의 종합주가지수."},
     {"t": "블루칩", "d": "안정성이 높은 대형 우량주."},
     {"t": "시가총액", "d": "기업의 전체 가치 (주가 × 주식수)."},
-    {"t": "PER/PBR", "d": "이익 및 자산 대비 주가 수준 지표."},
-    {"t": "공매도", "d": "주가 하락을 예상하고 빌려서 파는 전략."},
-    {"t": "서킷브레이커", "d": "급락 시 매매를 일시 중단하는 제도."}
+    {"t": "PER/PBR", "d": "이익 및 자산 대비 주가 수준 지표."}
 ]
 
 QUIZ_POOL = [
     {"q": "상승장을 상징하는 동물은?", "a": "황소(Bull)", "o": ["황소(Bull)", "곰(Bear)", "사자(Lion)"]},
-    {"q": "기업 이익을 주주에게 현금으로 나눠주는 돈은?", "a": "배당금", "o": ["배당금", "이자", "상여금"]},
+    {"q": "뉴스 제목을 분석하여 투자 심리를 읽는 기능은?", "a": "감성 분석", "o": ["감성 분석", "차트 분석", "재무 제표"]},
     {"q": "하락장을 상징하는 동물은?", "a": "곰(Bear)", "o": ["황소", "곰", "독수리"]}
 ]
 
 EXCHANGE_RATE = 1425.0
 
-# --- 3. 세션 상태 초기화 (아카데미 및 뉴스 데이터 완전 고정) ---
+# --- 3. 세션 상태 초기화 ---
 if 'user_name' not in st.session_state:
     st.session_state.update({
         'user_name': "", 'tier': "초급", 'balance': 0.0, 'points': 0,
@@ -53,21 +52,40 @@ if 'user_name' not in st.session_state:
     })
 
 # --- 4. CSS: 토스 스타일 화이트 UI ---
-css_style = """
+css_code = """
     <style>
     .stApp { background-color: #ffffff; color: #191f28; }
     .metric-card { background: #f2f4f6; padding: 20px; border-radius: 16px; border: none; color: #191f28; }
     .rank-card { background: #ffffff; padding: 12px; border-bottom: 1px solid #f2f4f6; font-weight: bold; color: #191f28; }
-    .trend-card { background: #f9fafb; padding: 10px; border-radius: 12px; margin-bottom: 6px; font-size: 0.9rem; border: 1px solid #e5e8eb; }
     .news-card { background: #ffffff; padding: 15px; border-radius: 12px; border: 1px solid #f2f4f6; margin-bottom: 10px; transition: 0.2s; }
     .news-card:hover { background: #f9fafb; border-color: #3182f6; }
+    .sentiment-tag { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-right: 5px; }
+    .pos { background: #fff1f0; color: #ff4d4f; } .neg { background: #e6f7ff; color: #3182f6; }
     .timer-box { background: #ff4d4f; color: white !important; padding: 15px; border-radius: 12px; text-align: center; font-weight: bold; }
     .profit { color: #ff4d4f; } .loss { color: #3182f6; }
     </style>
 """
-st.markdown(css_style, unsafe_allow_html=True)
+st.markdown(css_code, unsafe_allow_html=True)
 
-# --- 5. 데이터 엔진 ---
+# --- 5. AI 감성 분석 엔진 (핵심 추가) ---
+def analyze_sentiment(text):
+    text = text.lower()
+    pos_words = ['surge', 'soar', 'rise', 'up', 'profit', 'beat', 'growth', 'gain', 'buy', 'bull', 'strong', '긍정', '상승', '급등', '이익', '호재']
+    neg_words = ['drop', 'fall', 'down', 'loss', 'miss', 'crash', 'sell', 'bear', 'weak', 'risk', '부정', '하락', '급락', '손실', '악재']
+    
+    score = 0
+    for w in pos_words: 
+        if w in text: score += 1
+    for w in neg_words: 
+        if w in text: score -= 1
+        
+    if score >= 2: return "🚀 강력 호재", "pos"
+    if score == 1: return "😊 호재", "pos"
+    if score == -1: return "📉 악재", "neg"
+    if score <= -2: return "😱 강력 악재", "neg"
+    return "😐 중립", "neu"
+
+# --- 6. 데이터 엔진 ---
 @st.cache_data(ttl=10)
 def fetch_market_data(name, period="1일"):
     p_map = {"1일": "1d", "1주": "5d", "1달": "1mo", "3달": "3mo", "1년": "1y", "5년": "5y", "전체": "10y"}
@@ -83,25 +101,25 @@ def fetch_market_data(name, period="1일"):
         return {"price": krw, "usd": usd, "change": chg, "vol": vol, "df": data}
     except: return None
 
-# 💡 [핵심 개선] 뉴스 데이터를 훨씬 유연하게 가져오도록 수정
 @st.cache_data(ttl=300)
 def fetch_robust_news(name):
     try:
         ticker = yf.Ticker(STOCK_MAP[name])
+        # 💡 [버그 해결] 다양한 뉴스 필드 탐색
         raw_news = ticker.news
         if not raw_news: return []
         
-        refined_news = []
+        refined = []
         for n in raw_news[:6]:
-            # 여러 가지 키값을 순차적으로 확인하여 '제목 없음' 방지
             title = n.get('title') or n.get('headline') or "뉴스 제목을 불러올 수 없습니다"
             link = n.get('link') or n.get('url') or "#"
             pub = n.get('publisher') or n.get('source') or "제공처 정보 없음"
-            refined_news.append({'title': title, 'link': link, 'publisher': pub})
-        return refined_news
+            sentiment, css_class = analyze_sentiment(title)
+            refined.append({'title': title, 'link': link, 'publisher': pub, 'sentiment': sentiment, 'class': css_class})
+        return refined
     except: return []
 
-# --- 6. 토스 스타일 차트 ---
+# --- 7. 토스 스타일 차트 ---
 def draw_toss_chart(df, ticker, period):
     y_vals = df['Close'] * (EXCHANGE_RATE if ".KS" not in ticker else 1)
     v_vals = df['Volume']
@@ -118,37 +136,29 @@ def draw_toss_chart(df, ticker, period):
                       height=400, margin=dict(l=10, r=10, t=10, b=10))
     return fig
 
-# --- 7. 로그인 ---
+# --- 8. 로그인 ---
 if not st.session_state.user_name:
-    st.title("🏆 AI 투자 서바이벌: 시즌 6")
-    col_u, col_t = st.columns(2)
-    u_name = col_u.text_input("닉네임")
-    u_tier = col_t.selectbox("리그 선택 (초급: 1억 / 중급: 5천만 / 고급: 1천만)", ["초급", "중급", "고급"])
+    st.title("🏆 AI 투자 서바이벌: 뉴스 인사이트")
+    col1, col2 = st.columns(2)
+    u_name = col1.text_input("닉네임")
+    u_tier = col2.selectbox("리그 선택", ["초급", "중급", "고급"])
     if st.button("참가하기", use_container_width=True):
         if u_name:
             st.session_state.update({'user_name': u_name, 'tier': u_tier, 'balance': TIER_CFG[u_tier]['seed'],
-                                    'bots': [{"닉네임": n, "자산": TIER_CFG[u_tier]['seed']*(1+(random.random()-0.5)*0.1)} for n in ["A봇", "B봇", "C봇", "D봇"]],
+                                    'bots': [{"닉네임": n, "자산": TIER_CFG[u_tier]['seed']*(1+(random.random()-0.5)*0.1)} for n in ["A봇", "B봇", "C봇"]],
                                     'season_end': datetime.now() + timedelta(minutes=10)})
             st.rerun()
     st.stop()
 
-# --- 8. 실시간 연산 ---
+# 실시간 연산
 market_snap = {}
 for s in STOCK_MAP: market_snap[s] = fetch_market_data(s, period="1일")
-
-total_stock_val = sum(st.session_state.portfolio[s]['qty'] * market_snap[s]['price'] for s in STOCK_MAP if market_snap[s])
-total_assets = st.session_state.balance + total_stock_val
-
-valid_s = [s for s in STOCK_MAP if market_snap[s]]
-sorted_gainers = sorted(valid_s, key=lambda x: market_snap[x]['change'], reverse=True)
-sorted_losers = sorted(valid_s, key=lambda x: market_snap[x]['change'])
-sorted_popular = sorted(valid_s, key=lambda x: market_snap[x]['vol'], reverse=True)
-
+total_assets = st.session_state.balance + sum(st.session_state.portfolio[s]['qty'] * market_snap[s]['price'] for s in STOCK_MAP if market_snap[s])
 sec_left = max(0, (st.session_state.season_end - datetime.now()).total_seconds())
 if sec_left <= 0: st.session_state.is_ended = True
 
-# --- 9. 메인 네비게이션 ---
-st.sidebar.title(f"🚀 {st.session_state.tier}")
+# --- 9. 네비게이션 ---
+st.sidebar.title(f"🚀 {st.session_state.tier} 리그")
 page = st.sidebar.radio("🧭 메뉴", ["🏠 대시보드", "🛒 거래소", "📚 아카데미"])
 
 if page == "🏠 대시보드":
@@ -166,54 +176,51 @@ if page == "🏠 대시보드":
 elif page == "🛒 거래소":
     l_col, m_col, r_col = st.columns([1, 2.5, 1.2])
     with l_col:
-        st.subheader("🛒 종목")
-        target = st.selectbox("종목 선택", list(STOCK_MAP.keys()), label_visibility="collapsed")
+        target = st.selectbox("종목 선택", list(STOCK_MAP.keys()))
         st.write("---")
         st.write("🔥 **실시간 트렌드**")
-        t_tab = st.tabs(["🚀 상승", "📉 하락", "⭐ 인기"])
-        with t_tab[0]:
-            for s in sorted_gainers[:4]: st.markdown(f'<div class="trend-card">{s} <span class="profit" style="float:right;">{market_snap[s]["change"]:+.2f}%</span></div>', unsafe_allow_html=True)
-        with t_tab[1]:
-            for s in sorted_losers[:4]: st.markdown(f'<div class="trend-card">{s} <span class="loss" style="float:right;">{market_snap[s]["change"]:+.2f}%</span></div>', unsafe_allow_html=True)
-        with t_tab[2]:
-            for s in sorted_popular[:4]: st.markdown(f'<div class="trend-card">{s} <span style="float:right;color:#adb5bd;">{market_snap[s]["vol"]/10000:,.0f}만</span></div>', unsafe_allow_html=True)
+        valid_s = [s for s in STOCK_MAP if market_snap[s]]
+        sorted_gainers = sorted(valid_s, key=lambda x: market_snap[x]['change'], reverse=True)
+        for s in sorted_gainers[:5]: st.markdown(f'<div style="font-size:0.85rem;margin-bottom:5px;">{s} <span class="profit" style="float:right;">{market_snap[s]["change"]:+.2f}%</span></div>', unsafe_allow_html=True)
 
     with m_col:
         t_data = fetch_market_data(target, period=st.session_state.selected_period)
         if t_data:
             st.plotly_chart(draw_toss_chart(t_data['df'], STOCK_MAP[target], st.session_state.selected_period), use_container_width=True)
-            st.session_state.selected_period = st.radio("기간 선택", ["1일", "1주", "1달", "3달", "1년", "5년", "전체"], horizontal=True, label_visibility="collapsed")
-            st.write(f"### 현재가: **{t_data['price']:,.0f}원** <small>(${t_data['usd']:,.2f})</small>", unsafe_allow_html=True)
-            qty = st.number_input("수량", min_value=1, value=1)
+            st.session_state.selected_period = st.radio("기간", ["1일", "1주", "1달", "3달", "1년", "5년", "전체"], horizontal=True, label_visibility="collapsed")
+            st.write(f"### **{t_data['price']:,.0f}원**")
             b, s = st.columns(2)
-            if b.button("매수", use_container_width=True, disabled=st.session_state.is_ended):
+            qty = st.number_input("수량", min_value=1, value=1, label_visibility="collapsed")
+            if b.button("매수", use_container_width=True):
                 if st.session_state.balance >= t_data['price'] * qty:
                     st.session_state.balance -= t_data['price'] * qty
                     st.session_state.portfolio[target]['qty'] += qty; st.rerun()
-            if s.button("매도", use_container_width=True, disabled=st.session_state.is_ended):
+            if s.button("매도", use_container_width=True):
                 if st.session_state.portfolio[target]['qty'] >= qty:
                     st.session_state.balance += t_data['price'] * qty
                     st.session_state.portfolio[target]['qty'] -= qty; st.rerun()
 
             st.write("---")
-            st.subheader(f"📰 {target} 실시간 뉴스")
+            st.subheader(f"📰 {target} AI 뉴스 분석")
             news = fetch_robust_news(target)
             if news:
                 for n in news:
                     st.markdown(f"""
                         <div class="news-card">
                             <a href="{n['link']}" target="_blank" style="text-decoration:none; color:#191f28;">
-                                <div style="font-size:0.92rem; font-weight:bold; line-height:1.4;">{n['title']}</div>
-                                <div style="font-size:0.75rem; color:#8b95a1; margin-top:6px;">{n['publisher']}</div>
+                                <div style="margin-bottom:5px;">
+                                    <span class="sentiment-tag {n['class']}">{n['sentiment']}</span>
+                                    <span style="font-size:0.92rem; font-weight:bold;">{n['title']}</span>
+                                </div>
+                                <div style="font-size:0.75rem; color:#8b95a1;">{n['publisher']}</div>
                             </a>
                         </div>
                     """, unsafe_allow_html=True)
-            else:
-                st.info("국내 종목이나 일부 종목은 실시간 뉴스 제공이 제한될 수 있습니다. (나스닥 종목 추천)")
+            else: st.info("일부 종목은 뉴스 분석 제공이 지연될 수 있습니다.")
 
     with r_col:
         st.markdown(f'<div class="timer-box">⏳ {int(sec_left//60)}분 {int(sec_left%60)}초 후 종료</div>', unsafe_allow_html=True)
-        st.subheader("🏆 리그 랭킹")
+        st.subheader("🏆 리더보드")
         my_r = {"닉네임": f"{st.session_state.user_name} ⭐", "자산": total_assets}
         for b in st.session_state.bots: b['자산'] *= (1+(random.random()-0.5)*0.005)
         ranks = sorted(st.session_state.bots + [my_r], key=lambda x: x['자산'], reverse=True)
@@ -224,14 +231,11 @@ elif page == "📚 아카데미":
     st.title("📚 주식 성장 아카데미")
     t1, t2 = st.tabs(["📖 용어 사전", "❓ 포인트 퀴즈"])
     with t1:
-        st.subheader("💡 투자 필수 용어")
         start = st.session_state.term_idx
         for t in TERMS_POOL[start:start+5]:
             st.markdown(f'<div style="background:#f2f4f6;padding:15px;border-radius:12px;margin-bottom:10px;"><b>{t["t"]}</b>: {t["d"]}</div>', unsafe_allow_html=True)
-        if st.button("🔄 다음 용어"):
-            st.session_state.term_idx = (st.session_state.term_idx + 5) % len(TERMS_POOL); st.rerun()
+        if st.button("🔄 다음 용어"): st.session_state.term_idx = (st.session_state.term_idx + 5) % len(TERMS_POOL); st.rerun()
     with t2:
-        st.subheader("💎 퀴즈 풀고 포인트 획득")
         for i, q in enumerate(QUIZ_POOL):
             if not st.session_state.quiz_cleared[i]:
                 with st.container(border=True):
