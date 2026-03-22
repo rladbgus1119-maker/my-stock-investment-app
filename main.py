@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 from streamlit_autorefresh import st_autorefresh
 
 # 1. 페이지 설정 및 실시간 엔진 (1초 주기)
-st.set_page_config(page_title="AI 실시간 퀀트 v45", layout="wide")
-st_autorefresh(interval=1000, key="global_engine_v45")
+st.set_page_config(page_title="AI 실시간 퀀트 v46", layout="wide")
+st_autorefresh(interval=1000, key="global_engine_v46")
 
 # --- 2. 전역 데이터 설정 ---
 STOCK_MAP = {
@@ -20,9 +20,9 @@ STOCK_MAP = {
 }
 
 TIER_CFG = {
-    "초급": {"seed": 100000000, "pt_mul": 1.0, "safe_net": 1000000, "limit": 500000, "next": "중급"},
-    "중급": {"seed": 50000000, "pt_mul": 2.5, "safe_net": 500000, "limit": 200000, "next": "고급"},
-    "고급": {"seed": 10000000, "pt_mul": 5.0, "safe_net": 100000, "limit": 50000, "next": "마스터"}
+    "초급": {"seed": 100000000, "pt_mul": 1.0, "limit": 500000, "next": "중급"},
+    "중급": {"seed": 50000000, "pt_mul": 2.5, "limit": 200000, "next": "고급"},
+    "고급": {"seed": 10000000, "pt_mul": 5.0, "limit": 50000, "next": "마스터"}
 }
 
 TERMS_POOL = [
@@ -42,7 +42,7 @@ QUIZ_POOL = [
 
 EXCHANGE_RATE = 1425.0
 
-# --- 3. 세션 상태 초기화 ---
+# --- 3. 세션 상태 초기화 (아카데미 및 뉴스 데이터 완전 고정) ---
 if 'user_name' not in st.session_state:
     st.session_state.update({
         'user_name': "", 'tier': "초급", 'balance': 0.0, 'points': 0,
@@ -58,8 +58,8 @@ css_style = """
     .stApp { background-color: #ffffff; color: #191f28; }
     .metric-card { background: #f2f4f6; padding: 20px; border-radius: 16px; border: none; color: #191f28; }
     .rank-card { background: #ffffff; padding: 12px; border-bottom: 1px solid #f2f4f6; font-weight: bold; color: #191f28; }
-    .trend-card { background: #f9fafb; padding: 10px; border-radius: 12px; margin-bottom: 6px; font-size: 0.8rem; border: 1px solid #e5e8eb; }
-    .news-card { background: #ffffff; padding: 15px; border-radius: 12px; border: 1px solid #f2f4f6; margin-bottom: 10px; transition: 0.3s; }
+    .trend-card { background: #f9fafb; padding: 10px; border-radius: 12px; margin-bottom: 6px; font-size: 0.9rem; border: 1px solid #e5e8eb; }
+    .news-card { background: #ffffff; padding: 15px; border-radius: 12px; border: 1px solid #f2f4f6; margin-bottom: 10px; transition: 0.2s; }
     .news-card:hover { background: #f9fafb; border-color: #3182f6; }
     .timer-box { background: #ff4d4f; color: white !important; padding: 15px; border-radius: 12px; text-align: center; font-weight: bold; }
     .profit { color: #ff4d4f; } .loss { color: #3182f6; }
@@ -79,14 +79,26 @@ def fetch_market_data(name, period="1일"):
         chg = ((curr - data['Open'].iloc[0]) / data['Open'].iloc[0]) * 100
         vol = data['Volume'].iloc[-1]
         krw = int(curr) if ".KS" in STOCK_MAP[name] else int(curr * EXCHANGE_RATE)
-        return {"price": krw, "change": chg, "vol": vol, "df": data}
+        usd = curr if ".KS" not in STOCK_MAP[name] else curr / EXCHANGE_RATE
+        return {"price": krw, "usd": usd, "change": chg, "vol": vol, "df": data}
     except: return None
 
+# 💡 [핵심 개선] 뉴스 데이터를 훨씬 유연하게 가져오도록 수정
 @st.cache_data(ttl=300)
-def fetch_stock_news(name):
+def fetch_robust_news(name):
     try:
         ticker = yf.Ticker(STOCK_MAP[name])
-        return ticker.news[:6]
+        raw_news = ticker.news
+        if not raw_news: return []
+        
+        refined_news = []
+        for n in raw_news[:6]:
+            # 여러 가지 키값을 순차적으로 확인하여 '제목 없음' 방지
+            title = n.get('title') or n.get('headline') or "뉴스 제목을 불러올 수 없습니다"
+            link = n.get('link') or n.get('url') or "#"
+            pub = n.get('publisher') or n.get('source') or "제공처 정보 없음"
+            refined_news.append({'title': title, 'link': link, 'publisher': pub})
+        return refined_news
     except: return []
 
 # --- 6. 토스 스타일 차트 ---
@@ -111,11 +123,11 @@ if not st.session_state.user_name:
     st.title("🏆 AI 투자 서바이벌: 시즌 6")
     col_u, col_t = st.columns(2)
     u_name = col_u.text_input("닉네임")
-    u_tier = col_t.selectbox("리그 선택", ["초급", "중급", "고급"])
+    u_tier = col_t.selectbox("리그 선택 (초급: 1억 / 중급: 5천만 / 고급: 1천만)", ["초급", "중급", "고급"])
     if st.button("참가하기", use_container_width=True):
         if u_name:
             st.session_state.update({'user_name': u_name, 'tier': u_tier, 'balance': TIER_CFG[u_tier]['seed'],
-                                    'bots': [{"닉네임": n, "자산": TIER_CFG[u_tier]['seed']*(1+(random.random()-0.5)*0.1)} for n in ["A봇", "B봇", "C봇"]],
+                                    'bots': [{"닉네임": n, "자산": TIER_CFG[u_tier]['seed']*(1+(random.random()-0.5)*0.1)} for n in ["A봇", "B봇", "C봇", "D봇"]],
                                     'season_end': datetime.now() + timedelta(minutes=10)})
             st.rerun()
     st.stop()
@@ -127,7 +139,6 @@ for s in STOCK_MAP: market_snap[s] = fetch_market_data(s, period="1일")
 total_stock_val = sum(st.session_state.portfolio[s]['qty'] * market_snap[s]['price'] for s in STOCK_MAP if market_snap[s])
 total_assets = st.session_state.balance + total_stock_val
 
-# 트렌드
 valid_s = [s for s in STOCK_MAP if market_snap[s]]
 sorted_gainers = sorted(valid_s, key=lambda x: market_snap[x]['change'], reverse=True)
 sorted_losers = sorted(valid_s, key=lambda x: market_snap[x]['change'])
@@ -154,8 +165,7 @@ if page == "🏠 대시보드":
 
 elif page == "🛒 거래소":
     l_col, m_col, r_col = st.columns([1, 2.5, 1.2])
-    
-    with l_col: # 종목 선택 및 트렌드
+    with l_col:
         st.subheader("🛒 종목")
         target = st.selectbox("종목 선택", list(STOCK_MAP.keys()), label_visibility="collapsed")
         st.write("---")
@@ -168,43 +178,40 @@ elif page == "🛒 거래소":
         with t_tab[2]:
             for s in sorted_popular[:4]: st.markdown(f'<div class="trend-card">{s} <span style="float:right;color:#adb5bd;">{market_snap[s]["vol"]/10000:,.0f}만</span></div>', unsafe_allow_html=True)
 
-    with m_col: # 차트 및 뉴스
+    with m_col:
         t_data = fetch_market_data(target, period=st.session_state.selected_period)
         if t_data:
             st.plotly_chart(draw_toss_chart(t_data['df'], STOCK_MAP[target], st.session_state.selected_period), use_container_width=True)
             st.session_state.selected_period = st.radio("기간 선택", ["1일", "1주", "1달", "3달", "1년", "5년", "전체"], horizontal=True, label_visibility="collapsed")
-            
-            p_now = t_data['price']
-            st.write(f"### 현재가: **{p_now:,.0f}원**")
+            st.write(f"### 현재가: **{t_data['price']:,.0f}원** <small>(${t_data['usd']:,.2f})</small>", unsafe_allow_html=True)
             qty = st.number_input("수량", min_value=1, value=1)
             b, s = st.columns(2)
             if b.button("매수", use_container_width=True, disabled=st.session_state.is_ended):
-                if st.session_state.balance >= p_now * qty:
-                    st.session_state.balance -= p_now * qty
+                if st.session_state.balance >= t_data['price'] * qty:
+                    st.session_state.balance -= t_data['price'] * qty
                     st.session_state.portfolio[target]['qty'] += qty; st.rerun()
             if s.button("매도", use_container_width=True, disabled=st.session_state.is_ended):
                 if st.session_state.portfolio[target]['qty'] >= qty:
-                    st.session_state.balance += p_now * qty
+                    st.session_state.balance += t_data['price'] * qty
                     st.session_state.portfolio[target]['qty'] -= qty; st.rerun()
 
             st.write("---")
             st.subheader(f"📰 {target} 실시간 뉴스")
-            news = fetch_stock_news(target)
-            for n in news:
-                # 💡 [KeyError 해결 핵심] .get()을 사용하여 데이터가 없어도 에러 방지
-                link = n.get('link', '#') 
-                title = n.get('title', '제목 없음')
-                pub = n.get('publisher', '정보 없음')
-                st.markdown(f"""
-                    <div class="news-card">
-                        <a href="{link}" target="_blank" style="text-decoration:none; color:#191f28;">
-                            <div style="font-size:0.9rem; font-weight:bold;">{title}</div>
-                            <div style="font-size:0.75rem; color:#8b95a1; margin-top:5px;">{pub}</div>
-                        </a>
-                    </div>
-                """, unsafe_allow_html=True)
+            news = fetch_robust_news(target)
+            if news:
+                for n in news:
+                    st.markdown(f"""
+                        <div class="news-card">
+                            <a href="{n['link']}" target="_blank" style="text-decoration:none; color:#191f28;">
+                                <div style="font-size:0.92rem; font-weight:bold; line-height:1.4;">{n['title']}</div>
+                                <div style="font-size:0.75rem; color:#8b95a1; margin-top:6px;">{n['publisher']}</div>
+                            </a>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("국내 종목이나 일부 종목은 실시간 뉴스 제공이 제한될 수 있습니다. (나스닥 종목 추천)")
 
-    with r_col: # 랭킹
+    with r_col:
         st.markdown(f'<div class="timer-box">⏳ {int(sec_left//60)}분 {int(sec_left%60)}초 후 종료</div>', unsafe_allow_html=True)
         st.subheader("🏆 리그 랭킹")
         my_r = {"닉네임": f"{st.session_state.user_name} ⭐", "자산": total_assets}
@@ -224,7 +231,7 @@ elif page == "📚 아카데미":
         if st.button("🔄 다음 용어"):
             st.session_state.term_idx = (st.session_state.term_idx + 5) % len(TERMS_POOL); st.rerun()
     with t2:
-        st.subheader("💎 포인트 퀴즈")
+        st.subheader("💎 퀴즈 풀고 포인트 획득")
         for i, q in enumerate(QUIZ_POOL):
             if not st.session_state.quiz_cleared[i]:
                 with st.container(border=True):
