@@ -8,11 +8,11 @@ import random
 from datetime import datetime, timedelta
 from streamlit_autorefresh import st_autorefresh
 
-# 1. 페이지 설정 및 실시간 엔진
-st.set_page_config(page_title="AI 실시간 퀀트 v43", layout="wide")
-st_autorefresh(interval=1000, key="global_tick")
+# 1. 페이지 설정 및 실시간 엔진 (1초 주기)
+st.set_page_config(page_title="AI 실시간 퀀트 v44", layout="wide")
+st_autorefresh(interval=1000, key="global_tick_v44")
 
-# --- 2. 전역 데이터 설정 (코드 최상단 배치) ---
+# --- 2. 전역 데이터 설정 ---
 STOCK_MAP = {
     "삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "현대차": "005380.KS",
     "NVIDIA": "NVDA", "애플": "AAPL", "테슬라": "TSLA", "마이크로소프트": "MSFT",
@@ -52,20 +52,22 @@ if 'user_name' not in st.session_state:
         'trade_count': 0, 'messages': []
     })
 
-# --- 4. CSS: TokenError 방지를 위한 문자열 분리 ---
-css_code = """
+# --- 4. CSS: 토스 스타일 화이트 UI (TokenError 방지용 분리) ---
+css_style = """
     <style>
     .stApp { background-color: #ffffff; color: #191f28; }
     .metric-card { background: #f2f4f6; padding: 20px; border-radius: 16px; border: none; color: #191f28; }
     .rank-card { background: #ffffff; padding: 12px; border-bottom: 1px solid #f2f4f6; font-weight: bold; color: #191f28; }
     .trend-card { background: #f9fafb; padding: 10px; border-radius: 12px; margin-bottom: 6px; font-size: 0.9rem; border: 1px solid #e5e8eb; }
+    .news-card { background: #ffffff; padding: 15px; border-radius: 12px; border: 1px solid #f2f4f6; margin-bottom: 10px; transition: 0.3s; }
+    .news-card:hover { background: #f9fafb; border-color: #3182f6; }
     .timer-box { background: #ff4d4f; color: white !important; padding: 15px; border-radius: 12px; text-align: center; font-weight: bold; }
     .profit { color: #ff4d4f; } .loss { color: #3182f6; }
     </style>
 """
-st.markdown(css_code, unsafe_allow_html=True)
+st.markdown(css_style, unsafe_allow_html=True)
 
-# --- 5. 실시간 데이터 엔진 ---
+# --- 5. 데이터 엔진 (차트 및 실시간 뉴스) ---
 @st.cache_data(ttl=10)
 def fetch_market_data(name, period="1일"):
     p_map = {"1일": "1d", "1주": "5d", "1달": "1mo", "3달": "3mo", "1년": "1y", "5년": "5y", "전체": "10y"}
@@ -81,6 +83,14 @@ def fetch_market_data(name, period="1일"):
         return {"price": krw, "usd": usd, "change": chg, "vol": vol, "df": data}
     except: return None
 
+# 💡 [핵심 추가] 실시간 뉴스 페칭 함수
+@st.cache_data(ttl=300) # 뉴스는 주가보다 천천히(5분 단위) 갱신
+def fetch_stock_news(name):
+    try:
+        ticker = yf.Ticker(STOCK_MAP[name])
+        return ticker.news[:6] # 최신 뉴스 6개 추출
+    except: return []
+
 # --- 6. 토스 스타일 차트 ---
 def draw_toss_chart(df, ticker, period):
     y_vals = df['Close'] * (EXCHANGE_RATE if ".KS" not in ticker else 1)
@@ -88,11 +98,9 @@ def draw_toss_chart(df, ticker, period):
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Scatter(x=df.index, y=y_vals, mode='lines', line=dict(color='#3182f6', width=3), hovertemplate="%{y:,.0f}원"), secondary_y=True)
     fig.add_trace(go.Bar(x=df.index, y=v_vals, marker_color='#e5e8eb', opacity=0.4), secondary_y=False)
-    
     mx, mn = y_vals.max(), y_vals.min()
     fig.add_annotation(x=y_vals.idxmax(), y=mx, text=f"▲ {mx:,.0f}", showarrow=False, font=dict(color="#ff4d4f"), yshift=10, secondary_y=True)
     fig.add_annotation(x=y_vals.idxmin(), y=mn, text=f"▼ {mn:,.0f}", showarrow=False, font=dict(color="#3182f6"), yshift=-10, secondary_y=True)
-
     fig.update_layout(paper_bgcolor='white', plot_bgcolor='white', hovermode="x unified", showlegend=False,
                       xaxis=dict(showgrid=False, showticklabels=False if period=="1일" else True),
                       yaxis=dict(showgrid=False, range=[0, v_vals.max()*6]),
@@ -100,16 +108,16 @@ def draw_toss_chart(df, ticker, period):
                       height=400, margin=dict(l=10, r=10, t=10, b=10))
     return fig
 
-# --- 7. 로그인 ---
+# --- 7. 로그인 화면 ---
 if not st.session_state.user_name:
-    st.title("🏆 AI 투자 서바이벌: 시즌 4")
+    st.title("🏆 AI 투자 서바이벌: 시즌 5")
     col_u, col_t = st.columns(2)
     u_name = col_u.text_input("닉네임")
     u_tier = col_t.selectbox("리그 선택", ["초급", "중급", "고급"])
     if st.button("참가하기", use_container_width=True):
         if u_name:
             st.session_state.update({'user_name': u_name, 'tier': u_tier, 'balance': TIER_CFG[u_tier]['seed'],
-                                    'bots': [{"닉네임": n, "자산": TIER_CFG[u_tier]['seed']*(1+(random.random()-0.5)*0.1)} for n in ["퀀트마스터", "익산개미", "여의도소", "나스닥신"]],
+                                    'bots': [{"닉네임": n, "자산": TIER_CFG[u_tier]['seed']*(1+(random.random()-0.5)*0.1)} for n in ["A봇", "B봇", "C봇", "D봇"]],
                                     'season_end': datetime.now() + timedelta(minutes=10)})
             st.rerun()
     st.stop()
@@ -140,9 +148,8 @@ if page == "🏠 대시보드":
     c1.metric("💰 실시간 총 자산", f"{total_assets:,.0f}원")
     c2.metric("💵 가용 현금", f"{st.session_state.balance:,.0f}원")
     c3.metric("💎 포인트", f"{st.session_state.points}P")
-    
     st.divider()
-    st.subheader("📊 자산 구성 비중")
+    st.subheader("📊 자산 비중")
     labels = [s for s in STOCK_MAP if st.session_state.portfolio[s]['qty'] > 0] + ["현금"]
     values = [st.session_state.portfolio[s]['qty'] * market_snap[s]['price'] for s in STOCK_MAP if st.session_state.portfolio[s]['qty'] > 0] + [st.session_state.balance]
     st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4, marker=dict(colors=['#3182f6', '#f2f4f6']))]), use_container_width=True)
@@ -150,10 +157,9 @@ if page == "🏠 대시보드":
 elif page == "🛒 거래소":
     l_col, m_col, r_col = st.columns([1, 2.5, 1.2])
     
-    with l_col: # 💡 종목 선택 및 트렌드
+    with l_col: # 종목 선택 및 트렌드
         st.subheader("🛒 종목")
         target = st.selectbox("종목 선택", list(STOCK_MAP.keys()), label_visibility="collapsed")
-        
         st.write("---")
         st.write("🔥 **실시간 트렌드**")
         t_tab = st.tabs(["🚀 상승", "📉 하락", "⭐ 인기"])
@@ -164,12 +170,10 @@ elif page == "🛒 거래소":
         with t_tab[2]:
             for s in sorted_popular[:4]: st.markdown(f'<div class="trend-card">{s} <span style="float:right;color:#adb5bd;">{market_snap[s]["vol"]/10000:,.0f}만</span></div>', unsafe_allow_html=True)
 
-    with m_col: # 💡 차트 및 기간 버튼
+    with m_col: # 차트, 기간 버튼, 실시간 뉴스
         t_data = fetch_market_data(target, period=st.session_state.selected_period)
         if t_data:
             st.plotly_chart(draw_toss_chart(t_data['df'], STOCK_MAP[target], st.session_state.selected_period), use_container_width=True)
-            
-            # 💡 [피드백 반영] 그래프 바로 밑 기간 버튼 (10년 추가)
             st.session_state.selected_period = st.radio("기간 선택", ["1일", "1주", "1달", "3달", "1년", "5년", "전체"], horizontal=True, label_visibility="collapsed")
             
             st.write(f"### 현재가: **{t_data['price']:,.0f}원** <small>(${t_data['usd']:,.2f})</small>", unsafe_allow_html=True)
@@ -184,9 +188,25 @@ elif page == "🛒 거래소":
                     st.session_state.balance += t_data['price'] * qty
                     st.session_state.portfolio[target]['qty'] -= qty; st.rerun()
 
-    with r_col: # 💡 리얼 유저 실시간 랭킹
+            # 💡 [핵심 추가] 실시간 뉴스 섹션
+            st.write("---")
+            st.subheader(f"📰 {target} 관련 실시간 뉴스")
+            news_list = fetch_stock_news(target)
+            if news_list:
+                for n in news_list:
+                    st.markdown(f"""
+                        <div class="news-card">
+                            <a href="{n['link']}" target="_blank" style="text-decoration:none; color:#191f28;">
+                                <div style="font-size:0.9rem; font-weight:bold;">{n['title']}</div>
+                                <div style="font-size:0.75rem; color:#8b95a1; margin-top:5px;">{n['publisher']}</div>
+                            </a>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else: st.info("관련 뉴스를 불러오는 중입니다...")
+
+    with r_col: # 리얼 유저 실시간 랭킹
         st.markdown(f'<div class="timer-box">⏳ {int(sec_left//60)}분 {int(sec_left%60)}초 후 종료</div>', unsafe_allow_html=True)
-        st.subheader("🏆 리그 실시간 랭킹")
+        st.subheader("🏆 리그 랭킹")
         my_r = {"닉네임": f"{st.session_state.user_name} ⭐", "자산": total_assets}
         for b in st.session_state.bots: b['자산'] *= (1+(random.random()-0.5)*0.005)
         ranks = sorted(st.session_state.bots + [my_r], key=lambda x: x['자산'], reverse=True)
@@ -214,3 +234,8 @@ elif page == "📚 아카데미":
                         if ans == q['a']:
                             st.session_state.points += 100; st.session_state.quiz_cleared[i] = True; st.rerun()
             else: st.success(f"✅ Q{i+1} 완료")
+
+st.sidebar.divider()
+if st.sidebar.button("🔄 초기화"):
+    for k in list(st.session_state.keys()): del st.session_state[k]
+    st.rerun()
